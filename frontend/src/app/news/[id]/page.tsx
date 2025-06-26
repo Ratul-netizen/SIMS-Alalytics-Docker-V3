@@ -227,42 +227,45 @@ export default function NewsDetail() {
             </button>
           </div>
           {showMediaCoverage && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <h4 className="font-medium mb-2 flex items-center gap-2"><FaGlobe className="text-primary-600" />Bangladeshi Media Coverage</h4>
-                <div className="mb-3 text-gray-700 text-base flex-1">{parsedSummary.mediaCoverageSummary?.bangladeshiMediaCoverage || parsedSummary.mediaCoverageSummary?.bangladeshiMedia || "Not covered"}</div>
-                <div className="font-semibold">Bangladeshi Matches</div>
-                {(parsedSummary.supportingArticleMatches?.bangladeshiMatches && parsedSummary.supportingArticleMatches.bangladeshiMatches.length > 0) ? (
-                  <ul className="list-disc pl-5 text-sm">
-                    {parsedSummary.supportingArticleMatches.bangladeshiMatches.map((m: any, i: number) => (
-                      <li key={i}>
-                        <a href={m.url} className="text-primary-600 underline hover:text-primary-800 transition" target="_blank" rel="noopener noreferrer">{m.title}</a>
-                        <span className="ml-2 text-xs text-gray-500">({m.source})</span>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <div className="text-xs text-gray-400 italic">None</div>
-                )}
+            <>
+              <div className="mb-4 text-blue-700 font-medium text-base">News Coverage in Local and International Media</div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <h4 className="font-medium mb-2 flex items-center gap-2"><FaGlobe className="text-primary-600" />Bangladeshi Media Coverage</h4>
+                  <div className="mb-3 text-gray-700 text-base flex-1">{parsedSummary.mediaCoverageSummary?.bangladeshiMediaCoverage || parsedSummary.mediaCoverageSummary?.bangladeshiMedia || "Not covered"}</div>
+                  <div className="font-semibold">Bangladeshi Matches</div>
+                  {(parsedSummary.supportingArticleMatches?.bangladeshiMatches && parsedSummary.supportingArticleMatches.bangladeshiMatches.length > 0) ? (
+                    <ul className="list-disc pl-5 text-sm">
+                      {parsedSummary.supportingArticleMatches.bangladeshiMatches.map((m: any, i: number) => (
+                        <li key={i}>
+                          <a href={m.url} className="text-primary-600 underline hover:text-primary-800 transition" target="_blank" rel="noopener noreferrer">{m.title}</a>
+                          <span className="ml-2 text-xs text-gray-500">({m.source})</span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <div className="text-xs text-gray-400 italic">None</div>
+                  )}
+                </div>
+                <div>
+                  <h4 className="font-medium mb-2 flex items-center gap-2"><FaGlobe className="text-primary-600" />International Media Coverage</h4>
+                  <div className="mb-3 text-gray-700 text-base flex-1">{parsedSummary.mediaCoverageSummary?.internationalMediaCoverage || parsedSummary.mediaCoverageSummary?.internationalMedia || "Not covered"}</div>
+                  <div className="font-semibold">International Matches</div>
+                  {(parsedSummary.supportingArticleMatches?.internationalMatches && parsedSummary.supportingArticleMatches.internationalMatches.length > 0) ? (
+                    <ul className="list-disc pl-5 text-sm">
+                      {parsedSummary.supportingArticleMatches.internationalMatches.map((m: any, i: number) => (
+                        <li key={i}>
+                          <a href={m.url} className="text-primary-600 underline hover:text-primary-800 transition" target="_blank" rel="noopener noreferrer">{m.title}</a>
+                          <span className="ml-2 text-xs text-gray-500">({m.source})</span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <div className="text-xs text-gray-400 italic">None</div>
+                  )}
+                </div>
               </div>
-              <div>
-                <h4 className="font-medium mb-2 flex items-center gap-2"><FaGlobe className="text-primary-600" />International Media Coverage</h4>
-                <div className="mb-3 text-gray-700 text-base flex-1">{parsedSummary.mediaCoverageSummary?.internationalMediaCoverage || parsedSummary.mediaCoverageSummary?.internationalMedia || "Not covered"}</div>
-                <div className="font-semibold">International Matches</div>
-                {(parsedSummary.supportingArticleMatches?.internationalMatches && parsedSummary.supportingArticleMatches.internationalMatches.length > 0) ? (
-                  <ul className="list-disc pl-5 text-sm">
-                    {parsedSummary.supportingArticleMatches.internationalMatches.map((m: any, i: number) => (
-                      <li key={i}>
-                        <a href={m.url} className="text-primary-600 underline hover:text-primary-800 transition" target="_blank" rel="noopener noreferrer">{m.title}</a>
-                        <span className="ml-2 text-xs text-gray-500">({m.source})</span>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <div className="text-xs text-gray-400 italic">None</div>
-                )}
-              </div>
-            </div>
+            </>
           )}
         </div>
         {/* Fact Check & Score (collapsible, combined) */}
@@ -278,45 +281,48 @@ export default function NewsDetail() {
             </button>
           </div>
           {showFactCheckScore && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Fact Check Details */}
-              <div>
-                <div className="font-semibold mb-3 text-primary-700 flex items-center gap-2 text-lg"><FaCheckCircle className="text-primary-600" />Fact Check Details</div>
-                <div className="mb-4">
-                  <div className="font-medium mb-2">Status: <span className={`px-2 py-1 rounded text-sm font-semibold ${factCheckColor[fact]}`}>{parsedSummary.factCheck?.status || "unverified"}</span></div>
-                  {parsedSummary.factCheck?.sources && parsedSummary.factCheck.sources.length > 0 && (
-                    <div className="mb-4">
-                      <div className="font-medium mb-2">Verification Sources:</div>
-                      <ul className="list-disc pl-5 space-y-1">
-                        {parsedSummary.factCheck.sources.map((source: string, i: number) => (
-                          <li key={i}>
-                            <a href={source} className="text-primary-600 underline hover:text-primary-800 transition" target="_blank" rel="noopener noreferrer">{source}</a>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                  {parsedSummary.factCheck?.similarFactChecks && parsedSummary.factCheck.similarFactChecks.length > 0 && (
-                    <div>
-                      <div className="font-medium mb-2">Similar Fact Checks:</div>
-                      <ul className="list-disc pl-5 space-y-1">
-                        {parsedSummary.factCheck.similarFactChecks.map((check: any, i: number) => (
-                          <li key={i}>
-                            <a href={check.url} className="text-primary-600 underline hover:text-primary-800 transition" target="_blank" rel="noopener noreferrer">{check.title}</a>
-                            <span className="ml-2 text-xs text-gray-500">({check.source})</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-          </div>
-        </div>
-              {/* Score */}
-              <div className="flex flex-col items-center justify-center">
-            <div className="font-semibold text-gray-700 mb-2 flex items-center gap-2 text-lg"><FaCheckCircle className="text-green-500" />Score</div>
-            <div className="text-3xl font-mono text-primary-700">{typeof data.score === "number" ? data.score.toFixed(3) : "-"}</div>
+            <>
+              <div className="mb-4 text-blue-700 font-medium text-base">Verification Status and Credibility of the News</div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Fact Check Details */}
+                <div>
+                  <div className="font-semibold mb-3 text-primary-700 flex items-center gap-2 text-lg"><FaCheckCircle className="text-primary-600" />Fact Check Details</div>
+                  <div className="mb-4">
+                    <div className="font-medium mb-2">Status: <span className={`px-2 py-1 rounded text-sm font-semibold ${factCheckColor[fact]}`}>{parsedSummary.factCheck?.status || "unverified"}</span></div>
+                    {parsedSummary.factCheck?.sources && parsedSummary.factCheck.sources.length > 0 && (
+                      <div className="mb-4">
+                        <div className="font-medium mb-2">Verification Sources:</div>
+                        <ul className="list-disc pl-5 space-y-1">
+                          {parsedSummary.factCheck.sources.map((source: string, i: number) => (
+                            <li key={i}>
+                              <a href={source} className="text-primary-600 underline hover:text-primary-800 transition" target="_blank" rel="noopener noreferrer">{source}</a>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    {parsedSummary.factCheck?.similarFactChecks && parsedSummary.factCheck.similarFactChecks.length > 0 && (
+                      <div>
+                        <div className="font-medium mb-2">Similar Fact Checks:</div>
+                        <ul className="list-disc pl-5 space-y-1">
+                          {parsedSummary.factCheck.similarFactChecks.map((check: any, i: number) => (
+                            <li key={i}>
+                              <a href={check.url} className="text-primary-600 underline hover:text-primary-800 transition" target="_blank" rel="noopener noreferrer">{check.title}</a>
+                              <span className="ml-2 text-xs text-gray-500">({check.source})</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                {/* Score */}
+                <div className="flex flex-col items-center justify-center">
+                  <div className="font-semibold text-gray-700 mb-2 flex items-center gap-2 text-lg"><FaCheckCircle className="text-green-500" />Score</div>
+                  <div className="text-3xl font-mono text-primary-700">{typeof data.score === "number" ? data.score.toFixed(3) : "-"}</div>
+                </div>
               </div>
-            </div>
+            </>
           )}
         </div>
         {/* Sentiment Breakdown (collapsible) */}
@@ -332,32 +338,35 @@ export default function NewsDetail() {
             </button>
           </div>
           {showSentimentBreakdown && (
-            <div className="flex flex-col md:flex-row gap-10">
-              <div className="flex-1">
-                <div className="font-medium mb-2">Positive</div>
-                <div className="h-2 bg-green-100 rounded-full overflow-hidden">
-                  <div className="h-2 bg-green-700 rounded-full" style={{ width: `${(data.sentiment_analysis?.positive || 0) * 100}%` }}></div>
+            <>
+              <div className="mb-4 text-blue-700 font-medium text-base">Analysis of the News's Tone and Bias</div>
+              <div className="flex flex-col md:flex-row gap-10">
+                <div className="flex-1">
+                  <div className="font-medium mb-2">Positive</div>
+                  <div className="h-2 bg-green-100 rounded-full overflow-hidden">
+                    <div className="h-2 bg-green-700 rounded-full" style={{ width: `${(data.sentiment_analysis?.positive || 0) * 100}%` }}></div>
+                  </div>
+                </div>
+                <div className="flex-1">
+                  <div className="font-medium mb-2">Negative</div>
+                  <div className="h-2 bg-red-100 rounded-full overflow-hidden">
+                    <div className="h-2 bg-red-700 rounded-full" style={{ width: `${(data.sentiment_analysis?.negative || 0) * 100}%` }}></div>
+                  </div>
+                </div>
+                <div className="flex-1">
+                  <div className="font-medium mb-2">Neutral</div>
+                  <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                    <div className="h-2 bg-gray-700 rounded-full" style={{ width: `${(data.sentiment_analysis?.neutral || 0) * 100}%` }}></div>
+                  </div>
+                </div>
+                <div className="flex-1">
+                  <div className="font-medium mb-2">Cautious</div>
+                  <div className="h-2 bg-yellow-100 rounded-full overflow-hidden">
+                    <div className="h-2 bg-yellow-700 rounded-full" style={{ width: `${(data.sentiment_analysis?.cautious || 0) * 100}%` }}></div>
+                  </div>
                 </div>
               </div>
-              <div className="flex-1">
-                <div className="font-medium mb-2">Negative</div>
-                <div className="h-2 bg-red-100 rounded-full overflow-hidden">
-                  <div className="h-2 bg-red-700 rounded-full" style={{ width: `${(data.sentiment_analysis?.negative || 0) * 100}%` }}></div>
-                </div>
-              </div>
-              <div className="flex-1">
-                <div className="font-medium mb-2">Neutral</div>
-                <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                  <div className="h-2 bg-gray-700 rounded-full" style={{ width: `${(data.sentiment_analysis?.neutral || 0) * 100}%` }}></div>
-                </div>
-              </div>
-              <div className="flex-1">
-                <div className="font-medium mb-2">Cautious</div>
-                <div className="h-2 bg-yellow-100 rounded-full overflow-hidden">
-                  <div className="h-2 bg-yellow-700 rounded-full" style={{ width: `${(data.sentiment_analysis?.cautious || 0) * 100}%` }}></div>
-                </div>
-              </div>
-            </div>
+            </>
           )}
         </div>
         {/* Related Articles (collapsible) */}
