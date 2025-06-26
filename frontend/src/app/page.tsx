@@ -323,12 +323,13 @@ export default function Dashboard() {
   const sentimentCounts = useMemo(() => {
     const counts: Record<string, number> = {};
     globalFilteredNews.forEach((item: any) => {
-      const sentiment = item.sentiment_toward_bangladesh || item.sentiment || 'Neutral';
+      // Normalize sentiment to Title Case
+      let sentiment = (item.sentiment_toward_bangladesh || item.sentiment || 'Neutral').toLowerCase();
+      sentiment = sentiment.charAt(0).toUpperCase() + sentiment.slice(1);
       counts[sentiment] = (counts[sentiment] || 0) + 1;
     });
     return counts;
   }, [globalFilteredNews]);
-  
   const sentimentLabels = Object.keys(sentimentCounts);
   const sentimentValues = Object.values(sentimentCounts);
   const sentimentChartData = {
@@ -346,24 +347,22 @@ export default function Dashboard() {
   const factCheckCounts = useMemo(() => {
     const counts: Record<string, number> = {};
     globalFilteredNews.forEach((item: any) => {
-      const val = item.fact_check || 'Unverified';
-      counts[val] = (counts[val] || 0) + 1;
+      // Only count 'verified' and 'unverified' statuses
+      let status = (item.fact_check?.status || item.fact_check || 'unverified').toLowerCase();
+      if (status === 'verified') status = 'verified';
+      else status = 'unverified';
+      counts[status] = (counts[status] || 0) + 1;
     });
     return counts;
   }, [globalFilteredNews]);
   const factCheckLabels = Object.keys(factCheckCounts);
   const factCheckValues = Object.values(factCheckCounts);
   const factCheckPieData = {
-    labels: factCheckLabels,
+    labels: factCheckLabels.map(l => l.charAt(0).toUpperCase() + l.slice(1)),
     datasets: [
       {
         data: factCheckValues,
-        backgroundColor: [
-          '#22c55e', // True - green
-          '#ef4444', // False - red
-          '#fbbf24', // Mixed - yellow
-          '#a3a3a3', // Unverified - gray
-        ],
+        backgroundColor: factCheckLabels.map(l => l === 'verified' ? '#ef4444' : '#22c55e'),
       },
     ],
   };
