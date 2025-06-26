@@ -47,6 +47,18 @@ const factCheckIcon = {
   unverified: <FaRegNewspaper className="inline mr-1" />,
 };
 
+// Utility to get backend base URL
+const getApiBase = () => {
+  if (typeof window !== 'undefined') {
+    const { protocol, hostname } = window.location;
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+      return `${protocol}//${hostname}:5000`;
+    }
+    return `${protocol}//${hostname}`;
+  }
+  return '';
+};
+
 export default function NewsDetail() {
   const router = useRouter();
   const params = useParams();
@@ -64,7 +76,7 @@ export default function NewsDetail() {
   useEffect(() => {
     if (!id) return;
     setLoading(true);
-    axios.get(`http://localhost:5000/api/articles/${id}`)
+    axios.get(`${getApiBase()}/api/articles/${id}`)
       .then(res => setData(res.data))
       .catch(() => setError("Failed to load article."))
       .finally(() => setLoading(false));

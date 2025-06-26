@@ -81,6 +81,21 @@ interface DashboardData {
   keySources?: string[];
 }
 
+// Utility to get backend base URL
+const getApiBase = () => {
+  if (typeof window !== 'undefined') {
+    // Use same host/port as frontend, but port 5000 for backend if running locally
+    const { protocol, hostname } = window.location;
+    // If running on localhost, use port 5000 for backend
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+      return `${protocol}//${hostname}:5000`;
+    }
+    // Otherwise, use same origin (for production/proxy)
+    return `${protocol}//${hostname}`;
+  }
+  return '';
+};
+
 // Utility function to strip TLD from domain
 function stripTLD(domain: string) {
   if (!domain) return '';
@@ -129,7 +144,7 @@ export default function Dashboard() {
 
   // Fetch Indian sources for dropdown
   useEffect(() => {
-    axios.get("http://localhost:5000/api/indian-sources").then(res => setSources(res.data));
+    axios.get(`${getApiBase()}/api/indian-sources`).then(res => setSources(res.data));
   }, []);
 
   // Fetch dashboard data
@@ -142,7 +157,7 @@ export default function Dashboard() {
       if (range.end) params.end = range.end;
       if (src) params.source = src;
       if (showAll) params.show_all = 'true';
-      const response = await axios.get("http://localhost:5000/api/dashboard", { params });
+      const response = await axios.get(`${getApiBase()}/api/dashboard`, { params });
       setData(response.data);
     } catch (err) {
       setError("Failed to fetch dashboard data.");
