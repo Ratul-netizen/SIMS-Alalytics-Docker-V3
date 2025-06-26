@@ -844,9 +844,14 @@ export default function Dashboard() {
                       </span>
                     </td>
                     <td className="py-3 px-4">
-                      <span className={`px-2 py-1 rounded text-xs font-semibold ${sentimentColorMap[item.sentiment_toward_bangladesh || 'Neutral']}`}>
-                        {item.sentiment_toward_bangladesh || 'Neutral'}
-                      </span>
+                      {(() => {
+                        const sentiment = item.sentiment_toward_bangladesh || item.sentiment || 'Neutral';
+                        return (
+                          <span className={`px-2 py-1 rounded text-xs font-semibold ${sentimentColorMap[sentiment]}`}>
+                            {sentiment}
+                          </span>
+                        );
+                      })()}
                     </td>
                     <td className="py-3 px-4">
                       <span className={`px-2 py-1 rounded text-xs font-semibold ${factCheckColorMap[item.fact_check?.status || 'unverified']}`}>
