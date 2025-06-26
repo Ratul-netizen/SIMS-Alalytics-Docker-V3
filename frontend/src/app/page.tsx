@@ -1150,7 +1150,7 @@ export default function Dashboard() {
                     <div key={type} className="p-4 rounded border border-gray-200 bg-gray-50">
                       <div className="font-bold mb-2">{type}</div>
                       {impact ? (
-                        <div className="text-gray-700 text-sm">Impact: <span className="font-semibold">{impact}</span></div>
+                        <div className="text-gray-700 text-sm">{impact}</div>
                       ) : (
                         <div className="text-gray-400 text-sm italic">No data available</div>
                       )}
