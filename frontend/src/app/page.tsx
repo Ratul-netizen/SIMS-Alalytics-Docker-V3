@@ -520,10 +520,10 @@ export default function Dashboard() {
       // Show only the selected entity with a count of 1 for display
       return [[selectedEntity, 1]];
     } else {
-      // Show all entities from the globally filtered news
-      return getNEREntities(globalFilteredNews);
+      // Show all entities from the filtered news (responds to all filters)
+      return getNEREntities(filteredNews);
     }
-  }, [globalFilteredNews, selectedEntity]);
+  }, [filteredNews, selectedEntity]);
 
   // --- Calculate top 5 weighted keywords per individual article ---
   const getTopWeightedKeywords = (item: any) => {
@@ -784,29 +784,33 @@ export default function Dashboard() {
       <div className="bg-white rounded-lg shadow p-6 mb-8 relative">
         <h3 className="text-lg font-semibold mb-4 flex items-center gap-2"><FaCloud className="text-primary-500" /> Top Entities (NER)</h3>
         <div className="w-full h-[24rem]">
-          <ReactWordcloud
-            words={nerKeywords.map(([word, value]) => ({ text: String(word), value: Number(value) }))}
-            options={{
-              rotations: 2,
-              rotationAngles: [0, 90],
-              fontSizes: [18, 64],
-              fontFamily: 'system-ui',
-              padding: 4,
-              colors: ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf'],
-              enableTooltip: true,
-              deterministic: false,
-              scale: 'sqrt',
-              spiral: 'archimedean',
-              transitionDuration: 1000
-            }}
-            callbacks={{
-              onWordClick: (word) => {
-                setSelectedEntity(word.text);
-                setPage(1);
-              },
-              getWordTooltip: (word) => `${word.text}: ${word.value}`,
-            }}
-          />
+          {nerKeywords.length > 0 ? (
+            <ReactWordcloud
+              words={nerKeywords.map(([word, value]) => ({ text: String(word), value: Number(value) }))}
+              options={{
+                rotations: 2,
+                rotationAngles: [0, 90],
+                fontSizes: [18, 64],
+                fontFamily: 'system-ui',
+                padding: 4,
+                colors: ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf'],
+                enableTooltip: true,
+                deterministic: false,
+                scale: 'sqrt',
+                spiral: 'archimedean',
+                transitionDuration: 1000
+              }}
+              callbacks={{
+                onWordClick: (word) => {
+                  setSelectedEntity(word.text);
+                  setPage(1);
+                },
+                getWordTooltip: (word) => `${word.text}: ${word.value}`,
+              }}
+            />
+          ) : (
+            <div className="text-gray-400 text-center text-lg mt-24">No entities found for current filters.</div>
+          )}
           {selectedEntity && (
             <div className="absolute left-6 bottom-6 bg-white bg-opacity-90 rounded px-3 py-2 flex items-center gap-2 shadow">
               <span className="text-sm text-blue-700 font-semibold">Filtering by entity: {selectedEntity}</span>

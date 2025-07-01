@@ -822,6 +822,8 @@ def dashboard():
     pos = sentiment_counts.get('Positive', 0)
     neu = sentiment_counts.get('Neutral', 0)
     total = sum(sentiment_counts.values())
+    # Always define ratios
+    neg_ratio = pos_ratio = neu_ratio = 0
     if total > 0:
         neg_ratio = neg / total
         pos_ratio = pos / total
