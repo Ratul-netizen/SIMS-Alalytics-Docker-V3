@@ -235,10 +235,33 @@ export default function Dashboard() {
     setPage(1);
   };
 
-  // Table pagination
+  // Heuristics for bogus news
+  const BAD_TITLE_PHRASES = [
+    "latest news", "breaking news", "top headlines", "home", "update", "today", "live", "videos", "photos"
+  ];
+  function isBogus(article: any) {
+    const title = (article.headline || article.title || '').toLowerCase();
+    const text = (article.text || '').toLowerCase();
+    if (BAD_TITLE_PHRASES.some(phrase => title.includes(phrase))) return true;
+    // If text is missing or short, fallback to title for Bangladesh check
+    if ((!text || text.length < 100) && !title.includes("bangladesh")) return true;
+    // If text is present and long enough, require Bangladesh in text
+    if (text.length >= 100 && !text.includes("bangladesh")) return true;
+    return false;
+  }
+  // Filtered and deduped news
   const filteredNews = useMemo(() => {
     if (!data?.latestIndianNews) return [];
-    let filtered = [...data.latestIndianNews];
+    const seenTitles = new Set();
+    let filtered = [];
+    for (const article of data.latestIndianNews) {
+      const normTitle = (article.headline || article.title || '').trim().toLowerCase();
+      if (!normTitle || seenTitles.has(normTitle)) continue;
+      if (isBogus(article)) continue;
+      seenTitles.add(normTitle);
+      filtered.push(article);
+    }
+    // Apply UI filters
     if (selectedEntity) {
       filtered = filtered.filter(item => (item.entities || []).includes(selectedEntity));
     }
