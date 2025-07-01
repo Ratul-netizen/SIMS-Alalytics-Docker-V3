@@ -1002,14 +1002,14 @@ export default function Dashboard() {
         )}
       </div>
       {/* Timeline of Key Events */}
-      {globalFilteredNews && globalFilteredNews.length > 0 && (
+      {filteredNews && filteredNews.length > 0 && (
         <div className="bg-white rounded-lg shadow p-6 mb-8">
           <h3 className="text-lg font-semibold mb-4 flex items-center gap-2"><FaRegNewspaper /> Timeline of Key Events</h3>
           <div className="overflow-x-auto">
             <ul className="timeline timeline-vertical">
-              {globalFilteredNews.slice(0, 10).map((item: NewsItem) => (
+              {filteredNews.slice(0, 10).map((item: NewsItem) => (
                 <li key={item.id} className="mb-4">
-                  <span className="font-bold">{item.date ? format(new Date(item.date), "MMM d, yyyy") : "-"}</span>: 
+                  <span className="font-bold">{item.date ? format(new Date(item.date), "MMM d, yyyy") : "-"}</span>:
                   <a href={item.url || `/news/${item.id}`} className="text-primary-600 underline ml-2" target="_blank" rel="noopener noreferrer">
                     {item.headline.length > 80 ? item.headline.slice(0, 80) + "..." : item.headline}
                   </a>
