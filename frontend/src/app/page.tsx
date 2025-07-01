@@ -1286,11 +1286,16 @@ export default function Dashboard() {
           </div>
           {showKeySources && (
             <div className="p-6">
-              <ul className="list-disc pl-6">
+              <div className="flex flex-wrap gap-2">
                 {data.keySources.map((src: string) => (
-                  <li key={src} className="text-gray-700 text-sm">{src}</li>
+                  <span
+                    key={src}
+                    className="inline-block bg-blue-100 text-blue-700 rounded px-3 py-1 text-sm font-semibold"
+                  >
+                    {src}
+                  </span>
                 ))}
-              </ul>
+              </div>
             </div>
           )}
         </div>
