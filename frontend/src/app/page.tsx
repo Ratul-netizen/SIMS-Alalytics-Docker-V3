@@ -84,14 +84,16 @@ interface DashboardData {
 // Utility to get backend base URL
 const getApiBase = () => {
   if (typeof window !== 'undefined') {
-    // Use same host/port as frontend, but port 5000 for backend if running locally
-    const { protocol, hostname } = window.location;
+    const { protocol, hostname, port } = window.location;
+    
     // If running on localhost, use port 5000 for backend
     if (hostname === 'localhost' || hostname === '127.0.0.1') {
       return `${protocol}//${hostname}:5000`;
     }
-    // Otherwise, use same origin (for production/proxy)
-    return `${protocol}//${hostname}`;
+    
+    // For VM deployment, use the same hostname but port 5000
+    // This assumes the backend is accessible on port 5000
+    return `${protocol}//${hostname}:5000`;
   }
   return '';
 };
@@ -144,7 +146,21 @@ export default function Dashboard() {
 
   // Fetch Indian sources for dropdown
   useEffect(() => {
-    axios.get(`${getApiBase()}/api/indian-sources`).then(res => setSources(res.data));
+    const fetchSources = async () => {
+      try {
+        const response = await axios.get(`${getApiBase()}/api/indian-sources`, {
+          timeout: 5000,
+          headers: {
+            'Content-Type': 'application/json',
+          }
+        });
+        setSources(response.data);
+      } catch (err: any) {
+        console.error('Failed to fetch sources:', err);
+        // Don't set error state here as it's not critical for main functionality
+      }
+    };
+    fetchSources();
   }, []);
 
   // Fetch dashboard data
@@ -157,10 +173,29 @@ export default function Dashboard() {
       if (range.end) params.end = range.end;
       if (src) params.source = src;
       if (showAll) params.show_all = 'true';
-      const response = await axios.get(`${getApiBase()}/api/dashboard`, { params });
+      
+      const apiUrl = `${getApiBase()}/api/dashboard`;
+      console.log('Fetching from:', apiUrl);
+      
+      const response = await axios.get(apiUrl, { 
+        params,
+        timeout: 10000, // 10 second timeout
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
       setData(response.data);
-    } catch (err) {
-      setError("Failed to fetch dashboard data.");
+    } catch (err: any) {
+      console.error('API Error:', err);
+      if (err.code === 'ECONNREFUSED') {
+        setError("Cannot connect to backend server. Please check if the backend is running on port 5000.");
+      } else if (err.response?.status === 404) {
+        setError("API endpoint not found. Please check the backend configuration.");
+      } else if (err.response?.status >= 500) {
+        setError("Backend server error. Please check the server logs.");
+      } else {
+        setError(`Failed to fetch dashboard data: ${err.message || 'Unknown error'}`);
+      }
     } finally {
       setLoading(false);
     }

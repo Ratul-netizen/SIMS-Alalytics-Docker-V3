@@ -28,7 +28,12 @@ print("Database URI:", app.config['SQLALCHEMY_DATABASE_URI'])
 print("Database absolute path:", os.path.abspath('instance/SIMS_Analytics.db'))
 db = SQLAlchemy(app)
 migrate = Migrate(app, db)
-CORS(app, resources={r"/api/*": {"origins": "*"}})
+# Configure CORS for production deployment
+CORS(app, 
+     resources={r"/api/*": {"origins": ["http://localhost:3000", "http://127.0.0.1:3000", "*"]}},
+     supports_credentials=True,
+     methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+     allow_headers=["Content-Type", "Authorization", "X-Requested-With"])
 
 # Initialize database if it doesn't exist
 with app.app_context():
@@ -81,6 +86,15 @@ def run_exa_ingestion():
     if not EXA_API_KEY:
         print("Error: EXA_API_KEY environment variable not set")
         return
+    
+    # Check if we already have recent data (within last 2 hours)
+    with app.app_context():
+        recent_articles = Article.query.filter(
+            Article.published_at >= datetime.datetime.now() - datetime.timedelta(hours=2)
+        ).count()
+        if recent_articles > 10:
+            print(f"Found {recent_articles} recent articles, skipping ingestion to avoid duplicates")
+            return
     exa = Exa(api_key=EXA_API_KEY)
     print("Running advanced Exa ingestion for Bangladesh-related news coverage by Indian Media...")
     indian_and_bd_domains = [
@@ -113,13 +127,20 @@ def run_exa_ingestion():
         'scotsman.com', 'thejournal.ie', 'breakingnews.ie', 'irishmirror.ie', 'irishnews.com', 
         'belfasttelegraph.co.uk', 'news.com.au', 'smh.com.au', 'theage.com.au', 'theaustralian.com.au'
     ])
+    print("Starting Exa search with optimized parameters...")
     result = exa.search_and_contents(
         "Bangladesh-related News coverage by Indian news media",
         category="news",
         text=True,
-        num_results=100,
+        num_results=100,  # Reduced from 100 to 50 for better performance
         livecrawl="always",
         include_domains=list(indian_and_bd_domains),
+        subpages=3,  # Reduced from 10 to 3 for better performance
+        subpage_target=[
+            "article",
+            "story",
+            "content"
+        ],
         summary={
             "query": "You are a fact-checking and media-analysis assistant specialising in India–Bangladesh coverage.  For the Indian news article at {url} complete ALL of the following tasks and reply **only** with a single JSON object that exactly matches the schema provided below (do not wrap it in Markdown):  1️⃣  **extractSummary** → In ≤3 sentences, give a concise, neutral summary of the article's topic and its main claim(s).  2️⃣  **sourceDomain** → Return only the publisher's domain, e.g. \"thehindu.com\".  3️⃣  **newsCategory** → Classify into one of: Politics • Economy • Crime • Environment • Health • Technology • Diplomacy • Sports • Culture • Other  4️⃣  **sentimentTowardBangladesh** → Positive • Negative • Neutral (base it on overall tone toward Bangladesh).  5️⃣  **factCheck** → Compare the article's main claim(s) against the latest coverage in these outlets 🇧🇩 bdnews24.com, thedailystar.net, prothomalo.com, dhakatribune.com, newagebd.net, financialexpress.com.bd, theindependentbd.com 🌍 bbc.com, reuters.com, aljazeera.com, apnews.com, cnn.com, nytimes.com, theguardian.com, france24.com, dw.com ✅ Fact-checking sites: factwatchbd.com, altnews.in, boomlive.in, factchecker.in, thequint.com, factcheck.afp.com, snopes.com, politifact.com, fullfact.org, factcheck.org Return: • **status** \"verified\" | \"unverified\" • **sources** array of URLs used for verification • **similarFactChecks** array of objects { \"title\": …, \"source\": …, \"url\": … }  6️⃣  **mediaCoverageSummary** → For both Bangladeshi and international media, give ≤2-sentence summaries of how (or if) the claim was covered. Return \"Not covered\" if nothing found.  7️⃣  **supportingArticleMatches** → Two arrays: • **bangladeshiMatches** — articles from 🇧🇩 outlets • **internationalMatches** — articles from 🌍 outlets Each item: { \"title\": …, \"source\": …, \"url\": … }",
             "schema": {
@@ -263,6 +284,7 @@ def run_exa_ingestion():
         extras={"links": 1}
     )
     print(f"Total results: {len(result.results)}")
+    print(f"Processing completed in {datetime.datetime.now()}")
     for idx, item in enumerate(result.results):
         try:
             print(f"\nProcessing item {idx + 1}:")
@@ -829,7 +851,21 @@ def indian_sources_api():
 
 @app.route('/api/health')
 def health_check():
-    return jsonify({'status': 'healthy', 'timestamp': datetime.datetime.now().isoformat()})
+    try:
+        # Test database connection
+        db.session.execute(text('SELECT 1'))
+        return jsonify({
+            'status': 'healthy', 
+            'timestamp': datetime.datetime.now().isoformat(),
+            'database': 'connected',
+            'exa_api_key': 'configured' if EXA_API_KEY else 'missing'
+        })
+    except Exception as e:
+        return jsonify({
+            'status': 'unhealthy',
+            'error': str(e),
+            'timestamp': datetime.datetime.now().isoformat()
+        }), 500
 
 @app.route('/api/database-stats')
 def database_stats():
@@ -923,4 +959,4 @@ def database_stats():
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
-    app.run(debug=True) 
+    app.run(debug=True, host='0.0.0.0', port=5000) 

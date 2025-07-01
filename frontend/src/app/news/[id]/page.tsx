@@ -50,11 +50,16 @@ const factCheckIcon = {
 // Utility to get backend base URL
 const getApiBase = () => {
   if (typeof window !== 'undefined') {
-    const { protocol, hostname } = window.location;
+    const { protocol, hostname, port } = window.location;
+    
+    // If running on localhost, use port 5000 for backend
     if (hostname === 'localhost' || hostname === '127.0.0.1') {
       return `${protocol}//${hostname}:5000`;
     }
-    return `${protocol}//${hostname}`;
+    
+    // For VM deployment, use the same hostname but port 5000
+    // This assumes the backend is accessible on port 5000
+    return `${protocol}//${hostname}:5000`;
   }
   return '';
 };
@@ -76,10 +81,37 @@ export default function NewsDetail() {
   useEffect(() => {
     if (!id) return;
     setLoading(true);
-    axios.get(`${getApiBase()}/api/articles/${id}`)
-      .then(res => setData(res.data))
-      .catch(() => setError("Failed to load article."))
-      .finally(() => setLoading(false));
+    setError(null);
+    
+    const fetchArticle = async () => {
+      try {
+        const apiUrl = `${getApiBase()}/api/articles/${id}`;
+        console.log('Fetching article from:', apiUrl);
+        
+        const response = await axios.get(apiUrl, {
+          timeout: 10000,
+          headers: {
+            'Content-Type': 'application/json',
+          }
+        });
+        setData(response.data);
+      } catch (err: any) {
+        console.error('Article fetch error:', err);
+        if (err.code === 'ECONNREFUSED') {
+          setError("Cannot connect to backend server. Please check if the backend is running on port 5000.");
+        } else if (err.response?.status === 404) {
+          setError("Article not found. It may have been removed or the ID is invalid.");
+        } else if (err.response?.status >= 500) {
+          setError("Backend server error. Please check the server logs.");
+        } else {
+          setError(`Failed to load article: ${err.message || 'Unknown error'}`);
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchArticle();
   }, [id]);
 
   if (loading) return <div className="flex items-center justify-center min-h-screen">Loading...</div>;
