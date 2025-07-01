@@ -132,15 +132,14 @@ def run_exa_ingestion():
         "Bangladesh-related News coverage by Indian news media",
         category="news",
         text=True,
-        num_results=100,  # Reduced from 100 to 50 for better performance
+        num_results=100,  # Keep at 100 as requested
         livecrawl="always",
         include_domains=list(indian_and_bd_domains),
-        subpages=3,  # Reduced from 10 to 3 for better performance
+        subpages=5,  # Slightly deeper crawl
         subpage_target=[
-            "article",
-            "story",
-            "content"
+            "bangladesh", "article", "story", "news", "2024", "2023", "politics", "diplomacy"
         ],
+        include_text=["Bangladesh"],
         summary={
             "query": "You are a fact-checking and media-analysis assistant specialising in India–Bangladesh coverage.  For the Indian news article at {url} complete ALL of the following tasks and reply **only** with a single JSON object that exactly matches the schema provided below (do not wrap it in Markdown):  1️⃣  **extractSummary** → In ≤3 sentences, give a concise, neutral summary of the article's topic and its main claim(s).  2️⃣  **sourceDomain** → Return only the publisher's domain, e.g. \"thehindu.com\".  3️⃣  **newsCategory** → Classify into one of: Politics • Economy • Crime • Environment • Health • Technology • Diplomacy • Sports • Culture • Other  4️⃣  **sentimentTowardBangladesh** → Positive • Negative • Neutral (base it on overall tone toward Bangladesh).  5️⃣  **factCheck** → Compare the article's main claim(s) against the latest coverage in these outlets 🇧🇩 bdnews24.com, thedailystar.net, prothomalo.com, dhakatribune.com, newagebd.net, financialexpress.com.bd, theindependentbd.com 🌍 bbc.com, reuters.com, aljazeera.com, apnews.com, cnn.com, nytimes.com, theguardian.com, france24.com, dw.com ✅ Fact-checking sites: factwatchbd.com, altnews.in, boomlive.in, factchecker.in, thequint.com, factcheck.afp.com, snopes.com, politifact.com, fullfact.org, factcheck.org Return: • **status** \"verified\" | \"unverified\" • **sources** array of URLs used for verification • **similarFactChecks** array of objects { \"title\": …, \"source\": …, \"url\": … }  6️⃣  **mediaCoverageSummary** → For both Bangladeshi and international media, give ≤2-sentence summaries of how (or if) the claim was covered. Return \"Not covered\" if nothing found.  7️⃣  **supportingArticleMatches** → Two arrays: • **bangladeshiMatches** — articles from 🇧🇩 outlets • **internationalMatches** — articles from 🌍 outlets Each item: { \"title\": …, \"source\": …, \"url\": … }",
             "schema": {
@@ -280,12 +279,54 @@ def run_exa_ingestion():
                     }
                 }
             }
-        },
-        extras={"links": 1}
+        }
     )
+
     print(f"Total results: {len(result.results)}")
+
+    # Improved post-processing: filter out landing pages and bogus news
+    def is_article_url(url):
+        # Must not be homepage or section root
+        if not url or url.rstrip('/') in [
+            "https://indianexpress.com", "https://www.indianexpress.com"
+        ]:
+            return False
+        # Must contain year or /article/ or /news/ (but not end with /news)
+        return (
+            re.search(r'/20[0-9]{2}/', url) or
+            '/article/' in url or
+            ('/news/' in url and not url.rstrip('/').endswith('/news'))
+        )
+
+    def is_article_title(title):
+        # Exclude generic/landing page titles
+        bad_phrases = [
+            "Latest News", "Breaking News", "Top Headlines", "Home", "Update", "Today", "Live"
+        ]
+        if not title:
+            return False
+        if any(phrase.lower() in title.lower() for phrase in bad_phrases):
+            return False
+        # Prefer titles mentioning Bangladesh
+        return "bangladesh" in title.lower()
+
+    def is_article_text(text):
+        # Exclude if text is too short or just a list of links
+        if not text or len(text) < 200:
+            return False
+        # Must mention Bangladesh in a sentence (not just a menu)
+        return "bangladesh" in text.lower()
+
+    filtered_results = [
+        r for r in result.results
+        if is_article_url(getattr(r, 'url', ''))
+        and is_article_title(getattr(r, 'title', ''))
+        and is_article_text(getattr(r, 'text', ''))
+    ]
+    print(f"Filtered to {len(filtered_results)} likely articles (from {len(result.results)})")
+
     print(f"Processing completed in {datetime.datetime.now()}")
-    for idx, item in enumerate(result.results):
+    for idx, item in enumerate(filtered_results):
         try:
             print(f"\nProcessing item {idx + 1}:")
             print("Title:", item.title)

@@ -66,17 +66,27 @@ interface DashboardData {
     [key: string]: number;
   };
   implications: {
-    [key: string]: string[];
-  };
+    type: string;
+    impact: string;
+  }[];
   predictions: {
-    [key: string]: string[];
-  };
+    category: string;
+    likelihood?: string;
+    timeFrame?: string;
+    details?: string;
+  }[];
   factChecking: {
-    [key: string]: {
-      status: string;
-      sources: string[];
-      samples?: any[];
+    bangladeshiAgreement?: number;
+    internationalAgreement?: number;
+    lastUpdated?: string;
+    verdictCounts?: {
+      [key: string]: number;
     };
+    verdictSamples?: {
+      [key: string]: any[];
+    };
+    verificationStatus?: string;
+    [key: string]: any;
   };
   keySources?: string[];
 }
@@ -1177,7 +1187,7 @@ export default function Dashboard() {
         </div>
       )}
       {/* --- Implications & Analysis --- */}
-      {data?.implications && (
+      {Array.isArray(data.implications) && (
         <div className="bg-white rounded-lg shadow p-0 mb-8">
           <div className="flex items-center justify-between px-6 py-4 border-b">
             <h3 className="text-lg font-semibold flex items-center gap-2">Implications & Analysis</h3>
@@ -1189,12 +1199,8 @@ export default function Dashboard() {
             <div className="p-6">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {['Political Stability', 'Economic Impact', 'Social Cohesion'].map(type => {
-                  const implications = data.implications[type] || [];
-                  let impact = null;
-                  if (Array.isArray(implications) && implications.length > 0) {
-                    const first = implications[0];
-                    impact = typeof first === 'object' && first !== null && 'impact' in first ? (first as { impact?: string }).impact : typeof first === 'string' ? first : null;
-                  }
+                  const imp = data.implications.find((i: any) => i.type === type);
+                  const impact = imp ? imp.impact : null;
                   return (
                     <div key={type} className="p-4 rounded border border-gray-200 bg-gray-50">
                       <div className="font-bold mb-2">{type}</div>
@@ -1212,7 +1218,7 @@ export default function Dashboard() {
         </div>
       )}
       {/* --- Prediction (Outlook) --- */}
-      {data?.predictions && (
+      {Array.isArray(data.predictions) && (
         <div className="bg-white rounded-lg shadow p-0 mb-8">
           <div className="flex items-center justify-between px-6 py-4 border-b">
             <h3 className="text-lg font-semibold flex items-center gap-2">Prediction (Outlook)</h3>
@@ -1224,20 +1230,17 @@ export default function Dashboard() {
             <div className="p-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {['Political Landscape', 'Economic Implications'].map(type => {
-                  const predictions = data.predictions[type] || [];
-                  const pred = Array.isArray(predictions) && predictions.length > 0 ? predictions[0] : null;
-                  const hasData = pred && typeof pred === 'object' && ((pred as { likelihood?: string, timeFrame?: string, details?: string }).likelihood || (pred as { likelihood?: string, timeFrame?: string, details?: string }).timeFrame || (pred as { likelihood?: string, timeFrame?: string, details?: string }).details);
+                  const pred = data.predictions.find((p: any) => p.category === type);
+                  const hasData = pred && (pred.likelihood || pred.timeFrame || pred.details);
                   return (
                     <div key={type} className={`p-4 rounded border ${hasData ? 'border-yellow-200 bg-yellow-50' : 'border-gray-200 bg-gray-50'}`}> 
                       <div className="font-bold mb-2">{type}</div>
                       {hasData ? (
                         <>
-                          {'likelihood' in (pred as object) && (pred as any).likelihood && <div>Likelihood: <span className="font-semibold">{(pred as any).likelihood}%</span></div>}
-                          {'timeFrame' in (pred as object) && (pred as any).timeFrame && <div>Time Frame: {(pred as any).timeFrame}</div>}
-                          {'details' in (pred as object) && (pred as any).details && <div className="mt-2 text-gray-700 text-sm">{(pred as any).details}</div>}
+                          {pred.likelihood && <div>Likelihood: <span className="font-semibold">{pred.likelihood}%</span></div>}
+                          {pred.timeFrame && <div>Time Frame: {pred.timeFrame}</div>}
+                          {pred.details && <div className="mt-2 text-gray-700 text-sm">{pred.details}</div>}
                         </>
-                      ) : pred && typeof pred === 'string' ? (
-                        <div className="text-gray-700 text-sm">{pred}</div>
                       ) : (
                         <div className="text-gray-400 text-sm italic">No data available</div>
                       )}
@@ -1250,7 +1253,7 @@ export default function Dashboard() {
         </div>
       )}
       {/* --- Fact-Checking: Cross-Media Comparison --- */}
-      {data?.factChecking && (
+      {data.factChecking && (
         <div className="bg-white rounded-lg shadow p-0 mb-8">
           <div className="flex items-center justify-between px-6 py-4 border-b">
             <h3 className="text-lg font-semibold flex items-center gap-2">Fact-Checking: Cross-Media Comparison</h3>
@@ -1259,35 +1262,21 @@ export default function Dashboard() {
             </button>
           </div>
           {showFactChecking && (
-            <div className="p-6 grid grid-cols-1 md:grid-cols-4 gap-4">
-              {['False', 'Mixed', 'True', 'Unverified'].map(verdict => {
-                const info = data.factChecking[verdict] || {};
-                const samples = Array.isArray(info.samples) ? info.samples : [];
-                let color = 'border-gray-200 bg-gray-50';
-                if (verdict === 'True') color = 'border-green-200 bg-green-50';
-                if (verdict === 'False') color = 'border-red-200 bg-red-50';
-                if (verdict === 'Mixed') color = 'border-yellow-200 bg-yellow-50';
-                return (
-                  <div key={verdict} className={`p-4 rounded border ${color}`}>
-                    <div className="font-bold mb-1">{verdict} <span className="text-gray-500 font-normal">({samples.length})</span></div>
-                    {samples.length > 0 ? (
-                      <ul className="list-disc ml-5 text-xs text-gray-700">
-                        {samples.map((sample: any, idx: number) => (
-                          <li key={idx}><span className="font-semibold">{sample.headline}</span> <span className="text-gray-500">({sample.source}, {sample.date ? new Date(sample.date).toLocaleDateString() : 'N/A'})</span></li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <div className="text-xs text-gray-400">No samples available</div>
-                    )}
-                  </div>
-                );
-              })}
+            <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <div className="font-medium mb-2">Bangladeshi Agreement</div>
+                <div className="text-lg text-blue-700 font-bold">{data.factChecking.bangladeshiAgreement ?? 'No data available'}</div>
+              </div>
+              <div>
+                <div className="font-medium mb-2">International Agreement</div>
+                <div className="text-lg text-green-700 font-bold">{data.factChecking.internationalAgreement ?? 'No data available'}</div>
+              </div>
             </div>
           )}
         </div>
       )}
       {/* --- Key Sources Used --- */}
-      {data.keySources && data.keySources.length > 0 && (
+      {Array.isArray(data.keySources) && (
         <div className="bg-white rounded-lg shadow p-0 mb-8">
           <div className="flex items-center justify-between px-6 py-4 border-b">
             <h3 className="text-lg font-semibold flex items-center gap-2">Key Sources Used</h3>
@@ -1297,11 +1286,11 @@ export default function Dashboard() {
           </div>
           {showKeySources && (
             <div className="p-6">
-              <div className="flex flex-wrap gap-2">
-                {data.keySources.map((source: string, idx: number) => (
-                  <span key={idx} className="inline-block bg-blue-100 text-blue-700 rounded px-2 py-1 text-xs font-semibold">{source}</span>
+              <ul className="list-disc pl-6">
+                {data.keySources.map((src: string) => (
+                  <li key={src} className="text-gray-700 text-sm">{src}</li>
                 ))}
-              </div>
+              </ul>
             </div>
           )}
         </div>
