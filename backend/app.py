@@ -490,7 +490,7 @@ def run_exa_ingestion_with_context():
         run_exa_ingestion()
 
 scheduler = BackgroundScheduler()
-scheduler.add_job(run_exa_ingestion_with_context, 'interval', hours=6)
+scheduler.add_job(run_exa_ingestion_with_context, 'interval', hours=1)
 scheduler.start()
 
 @app.route('/api/articles')

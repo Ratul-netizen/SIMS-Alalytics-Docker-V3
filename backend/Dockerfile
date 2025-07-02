@@ -32,7 +32,7 @@ RUN dos2unix /app/entrypoint.sh && \
     chmod +x /app/entrypoint.sh
 
 # Setup cron job for data updates
-RUN echo "0 */6 * * * cd /app && flask fetch-exa >> /var/log/cron.log 2>&1" > /etc/cron.d/fetch-exa-cron && \
+RUN echo "0 */1 * * * cd /app && flask fetch-exa >> /var/log/cron.log 2>&1" > /etc/cron.d/fetch-exa-cron && \
     chmod 0644 /etc/cron.d/fetch-exa-cron && \
     crontab /etc/cron.d/fetch-exa-cron
 
