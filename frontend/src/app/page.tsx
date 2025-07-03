@@ -119,6 +119,49 @@ function stripTLD(domain: string) {
   return domain.replace(/\.(com|in|org|net|co|info|gov|edu|int|mil|biz|io|ai|news|tv|me|us|uk|bd|au|ca|pk|lk|np|my|sg|ph|id|cn|jp|kr|ru|fr|de|es|it|nl|se|no|fi|dk|pl|cz|tr|ir|sa|ae|qa|kw|om|bh|jo|lb|sy|iq|ye|il|za|ng|ke|gh|tz|ug|zm|zw|mu|mg|ma|dz|tn|ly|eg|sd|et|sn|cm|ci|gh|sl|gm|lr|bw|na|mz|ao|cd|cg|ga|gq|gw|st|cv|sc|km|eh|so|ss|cf|td|ne|ml|bf|bj|tg|gn|gw|mr|sm|va|mc|ad|li|gi|je|gg|im|fo|gl|sj|ax|eu|asia|cat|arpa|pro|museum|coop|aero|xxx|idv|mobi|name|jobs|travel|post|geo|tel|gov|edu|mil|int|arpa|root|test|example|invalid|localhost)(\.[a-z]{2,})?$/, '');
 }
 
+// --- Calculate top 5 weighted keywords per individual article ---
+const getTopWeightedKeywords = (item: any) => {
+  const text = `${item.headline || ''} ${item.full_text || ''}`.toLowerCase();
+  // Common stop words to filter out
+  const stopWords = new Set([
+    'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'is', 'are', 'was', 'were', 'be', 'been', 'being', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could', 'should', 'may', 'might', 'must', 'can', 'this', 'that', 'these', 'those', 'i', 'you', 'he', 'she', 'it', 'we', 'they', 'me', 'him', 'her', 'us', 'them', 'my', 'your', 'his', 'her', 'its', 'our', 'their', 'said', 'says', 'also', 'more', 'very', 'what', 'when', 'where', 'who', 'why', 'how', 'all', 'any', 'both', 'each', 'few', 'most', 'other', 'some', 'such', 'no', 'nor', 'not', 'only', 'own', 'same', 'so', 'than', 'too', 'from', 'up', 'out', 'down', 'off', 'over', 'under', 'again', 'further', 'then', 'once'
+  ]);
+  // Extract words and count frequency
+  const words = text.match(/\b[a-z]{3,}\b/g) || [];
+  const wordFreq: Record<string, number> = {};
+  words.forEach(word => {
+    if (!stopWords.has(word) && word.length >= 3) {
+      wordFreq[word] = (wordFreq[word] || 0) + 1;
+    }
+  });
+  // Combine with entities for better keyword extraction
+  const entities = item.entities || [];
+  entities.forEach((entity: string) => {
+    const entityLower = entity.toLowerCase();
+    // Count how many times this entity appears in the text
+    const entityCount = (text.match(new RegExp(entityLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) || []).length;
+    if (entityCount > 0) {
+      wordFreq[entity] = entityCount;
+    }
+  });
+  // Sort by frequency and return top 5
+  return Object.entries(wordFreq)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([word, count]) => ({ word, count }));
+};
+
+// --- NER Top Entities from backend - DYNAMIC based on selection ---
+const getNEREntities = (news: any[]) => {
+  const freq: Record<string, number> = {};
+  news.forEach(item => {
+    (item.entities || []).forEach((entity: string) => {
+      if (entity.length > 2) freq[entity] = (freq[entity] || 0) + 1;
+    });
+  });
+  return Object.entries(freq).sort((a, b) => b[1] - a[1]).slice(0, 35);
+};
+
 export default function Dashboard() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -265,8 +308,18 @@ export default function Dashboard() {
     if (selectedEntity) {
       filtered = filtered.filter(item => (item.entities || []).includes(selectedEntity));
     }
-    if (sentimentFilter) filtered = filtered.filter(item => (item.sentiment || "").toLowerCase() === sentimentFilter.toLowerCase());
-    if (categoryFilter) filtered = filtered.filter(item => (item.category || "").toLowerCase() === categoryFilter.toLowerCase());
+    if (sentimentFilter) {
+      filtered = filtered.filter(item => {
+        const itemSentiment = (item.sentiment || "").toLowerCase();
+        return itemSentiment === sentimentFilter.toLowerCase();
+      });
+    }
+    if (categoryFilter) {
+      filtered = filtered.filter(item => {
+        const itemCategory = (item.category || "").toLowerCase();
+        return itemCategory === categoryFilter.toLowerCase();
+      });
+    }
     if (keywordFilter) filtered = filtered.filter(item => (item.headline || '').toLowerCase().includes(keywordFilter.toLowerCase()));
     return filtered;
   }, [data, selectedEntity, sentimentFilter, categoryFilter, keywordFilter]);
@@ -278,8 +331,18 @@ export default function Dashboard() {
     if (selectedEntity) {
       filtered = filtered.filter(item => (item.entities || []).includes(selectedEntity));
     }
-    if (sentimentFilter) filtered = filtered.filter(item => (item.sentiment || "").toLowerCase() === sentimentFilter.toLowerCase());
-    if (categoryFilter) filtered = filtered.filter(item => (item.category || "").toLowerCase() === categoryFilter.toLowerCase());
+    if (sentimentFilter) {
+      filtered = filtered.filter(item => {
+        const itemSentiment = (item.sentiment || "").toLowerCase();
+        return itemSentiment === sentimentFilter.toLowerCase();
+      });
+    }
+    if (categoryFilter) {
+      filtered = filtered.filter(item => {
+        const itemCategory = (item.category || "").toLowerCase();
+        return itemCategory === categoryFilter.toLowerCase();
+      });
+    }
     if (keywordFilter) filtered = filtered.filter(item => (item.headline || '').toLowerCase().includes(keywordFilter.toLowerCase()));
     return filtered;
   }, [data, selectedEntity, sentimentFilter, categoryFilter, keywordFilter]);
@@ -406,8 +469,8 @@ export default function Dashboard() {
   const sentimentCounts = useMemo(() => {
     const counts: Record<string, number> = {};
     globalFilteredNews.forEach((item: any) => {
-      // Normalize sentiment to Title Case
-      let sentiment = (item.sentiment_toward_bangladesh || item.sentiment || 'Neutral').toLowerCase();
+      // Use the sentiment field directly from the API response
+      let sentiment = (item.sentiment || 'Neutral').toLowerCase();
       sentiment = sentiment.charAt(0).toUpperCase() + sentiment.slice(1);
       counts[sentiment] = (counts[sentiment] || 0) + 1;
     });
@@ -505,62 +568,26 @@ export default function Dashboard() {
   };
 
   // --- NER Top Entities from backend - DYNAMIC based on selection ---
-  const getNEREntities = (news: any[]) => {
-    const freq: Record<string, number> = {};
-    news.forEach(item => {
-      (item.entities || []).forEach((entity: string) => {
-        if (entity.length > 2) freq[entity] = (freq[entity] || 0) + 1;
-      });
-    });
-    return Object.entries(freq).sort((a, b) => b[1] - a[1]).slice(0, 35);
-  };
-  
   const nerKeywords = useMemo(() => {
     if (selectedEntity) {
       // Show only the selected entity with a count of 1 for display
       return [[selectedEntity, 1]];
     } else {
       // Show all entities from the filtered news (responds to all filters)
-      return getNEREntities(filteredNews);
+      const entities = getNEREntities(filteredNews);
+      if (entities.length > 0) {
+        return entities;
+      }
+      // Fallback: use keywords from getTopWeightedKeywords if no entities found
+      const keywordFreq: Record<string, number> = {};
+      filteredNews.forEach(item => {
+        getTopWeightedKeywords(item).forEach(({ word, count }: { word: string, count: number }) => {
+          keywordFreq[word] = (keywordFreq[word] || 0) + count;
+        });
+      });
+      return Object.entries(keywordFreq).sort((a, b) => b[1] - a[1]).slice(0, 35);
     }
   }, [filteredNews, selectedEntity]);
-
-  // --- Calculate top 5 weighted keywords per individual article ---
-  const getTopWeightedKeywords = (item: any) => {
-    const text = `${item.headline || ''} ${item.full_text || ''}`.toLowerCase();
-    
-    // Common stop words to filter out
-    const stopWords = new Set([
-      'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'is', 'are', 'was', 'were', 'be', 'been', 'being', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could', 'should', 'may', 'might', 'must', 'can', 'this', 'that', 'these', 'those', 'i', 'you', 'he', 'she', 'it', 'we', 'they', 'me', 'him', 'her', 'us', 'them', 'my', 'your', 'his', 'her', 'its', 'our', 'their', 'said', 'says', 'also', 'more', 'very', 'what', 'when', 'where', 'who', 'why', 'how', 'all', 'any', 'both', 'each', 'few', 'most', 'other', 'some', 'such', 'no', 'nor', 'not', 'only', 'own', 'same', 'so', 'than', 'too', 'from', 'up', 'out', 'down', 'off', 'over', 'under', 'again', 'further', 'then', 'once'
-    ]);
-    
-    // Extract words and count frequency
-    const words = text.match(/\b[a-z]{3,}\b/g) || [];
-    const wordFreq: Record<string, number> = {};
-    
-    words.forEach(word => {
-      if (!stopWords.has(word) && word.length >= 3) {
-        wordFreq[word] = (wordFreq[word] || 0) + 1;
-      }
-    });
-    
-    // Combine with entities for better keyword extraction
-    const entities = item.entities || [];
-    entities.forEach((entity: string) => {
-      const entityLower = entity.toLowerCase();
-      // Count how many times this entity appears in the text
-      const entityCount = (text.match(new RegExp(entityLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) || []).length;
-      if (entityCount > 0) {
-        wordFreq[entity] = entityCount;
-      }
-    });
-    
-    // Sort by frequency and return top 5
-    return Object.entries(wordFreq)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 5)
-      .map(([word, count]) => ({ word, count }));
-  };
 
   // Add back getSentimentStats with correct color mapping - using GLOBAL filtered data
   const getSentimentStats = (filteredNews: any[]) => {
@@ -931,7 +958,7 @@ export default function Dashboard() {
                     </td>
                     <td className="py-3 px-4">
                       {(() => {
-                        const sentiment = item.sentiment_toward_bangladesh || item.sentiment || 'Neutral';
+                        const sentiment = item.sentiment || 'Neutral';
                         return (
                           <span className={`px-2 py-1 rounded text-xs font-semibold ${sentimentColorMap[sentiment]}`}>
                             {sentiment}
@@ -1019,7 +1046,7 @@ export default function Dashboard() {
                   </a>
                   <div className="flex gap-2 mt-1">
                     <span className={`px-2 py-0.5 rounded text-xs ${categoryColorMap[item.category || item.news_category || 'Other'] || 'bg-gray-100 text-gray-700 border-gray-300'}`}>{item.category || item.news_category || 'Other'}</span>
-                    <span className={`px-2 py-0.5 rounded text-xs ${sentimentColorMap[item.sentiment_toward_bangladesh || 'Neutral']}`}>{item.sentiment_toward_bangladesh || 'Neutral'}</span>
+                    <span className={`px-2 py-0.5 rounded text-xs ${sentimentColorMap[item.sentiment || 'Neutral']}`}>{item.sentiment || 'Neutral'}</span>
                     <span className={`px-2 py-0.5 rounded text-xs ${factCheckColorMap[item.fact_check?.status || 'unverified']}`}>{item.fact_check?.status || 'unverified'}</span>
                   </div>
                 </li>
