@@ -14,6 +14,7 @@ import spacy
 from collections import Counter
 from sqlalchemy import text
 import hashlib
+import logging
 
 # Ensure instance directory exists
 instance_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'instance')
@@ -29,9 +30,39 @@ print("Database URI:", app.config['SQLALCHEMY_DATABASE_URI'])
 print("Database absolute path:", os.path.abspath('instance/SIMS_Analytics.db'))
 db = SQLAlchemy(app)
 migrate = Migrate(app, db)
-# Configure CORS for production deployment
+# --- Global Source Lists ---
+INDIAN_SOURCES = set([
+    "timesofindia.indiatimes.com", "hindustantimes.com", "ndtv.com", "thehindu.com", "indianexpress.com", "indiatoday.in", "news18.com", "zeenews.india.com", "aajtak.in", "abplive.com", "jagran.com", "bhaskar.com", "livehindustan.com", "business-standard.com", "economictimes.indiatimes.com", "livemint.com", "scroll.in", "thewire.in", "wionews.com", "indiatvnews.com", "newsnationtv.com", "jansatta.com", "india.com"
+])
+BD_SOURCES = set([
+    'thedailystar.net', 'bdnews24.com', 'newagebd.net', 'tbsnews.net', 'dhakatribune.com', 
+    'prothomalo.com', 'jugantor.com', 'kalerkantho.com', 'banglatribune.com', 'manabzamin.com', 
+    'bssnews.net', 'observerbd.com', 'daily-sun.com', 'dailyjanakantha.com', 
+    'thefinancialexpress.com.bd', 'unb.com.bd', 'risingbd.com', 'bangladeshpost.net', 
+    'daily-bangladesh.com', 'bhorerkagoj.com', 'dailyinqilab.com', 'samakal.com', 
+    'ittefaq.com.bd', 'amardesh.com', 'dailynayadiganta.com', 'dailysangram.com'
+])
+INTL_SOURCES = set([
+    'bbc.com', 'cnn.com', 'aljazeera.com', 'reuters.com', 'apnews.com', 'theguardian.com', 
+    'nytimes.com', 'washingtonpost.com', 'dw.com', 'france24.com', 'abc.net.au', 'cbc.ca', 
+    'cbsnews.com', 'nbcnews.com', 'foxnews.com', 'sky.com', 'japantimes.co.jp', 
+    'straitstimes.com', 'channelnewsasia.com', 'scmp.com', 'gulfnews.com', 'arabnews.com', 
+    'rt.com', 'tass.com', 'sputniknews.com', 'chinadaily.com.cn', 'globaltimes.cn', 
+    'lemonde.fr', 'spiegel.de', 'elpais.com', 'corriere.it', 'lefigaro.fr', 'asahi.com', 
+    'mainichi.jp', 'yomiuri.co.jp', 'koreatimes.co.kr', 'joongang.co.kr', 'hankyoreh.com', 
+    'latimes.com', 'usatoday.com', 'bloomberg.com', 'forbes.com', 'wsj.com', 'economist.com', 
+    'ft.com', 'npr.org', 'voanews.com', 'rferl.org', 'thetimes.co.uk', 'independent.co.uk', 
+    'telegraph.co.uk', 'mirror.co.uk', 'express.co.uk', 'dailymail.co.uk', 'thesun.co.uk', 
+    'metro.co.uk', 'eveningstandard.co.uk', 'irishtimes.com', 'rte.ie', 'heraldscotland.com', 
+    'scotsman.com', 'thejournal.ie', 'breakingnews.ie', 'irishmirror.ie', 'irishnews.com', 
+    'belfasttelegraph.co.uk', 'news.com.au', 'smh.com.au', 'theage.com.au', 'theaustralian.com.au'
+])
+# --- Logging Setup ---
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+# --- CORS Configuration ---
 CORS(app, 
-     resources={r"/api/*": {"origins": ["http://localhost:3000", "http://127.0.0.1:3000", "*"]}},
+     resources={r"/api/*": {"origins": "*"}},
      supports_credentials=True,
      methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
      allow_headers=["Content-Type", "Authorization", "X-Requested-With"])
@@ -80,12 +111,14 @@ class IntMatch(db.Model):
 
 def safe_capitalize(val, default='Neutral'):
     if isinstance(val, str):
-        return val.capitalize()
+        v = val.capitalize()
+        if v in ['Positive', 'Negative', 'Neutral', 'Cautious']:
+            return v
     return default
 
 def run_exa_ingestion():
     if not EXA_API_KEY:
-        print("Error: EXA_API_KEY environment variable not set")
+        logger.error("Error: EXA_API_KEY environment variable not set")
         return
     
     # Check if we already have recent data (within last 2 hours)
@@ -94,10 +127,10 @@ def run_exa_ingestion():
             Article.published_at >= datetime.datetime.now() - datetime.timedelta(hours=2)
         ).count()
         if recent_articles > 10:
-            print(f"Found {recent_articles} recent articles, skipping ingestion to avoid duplicates")
+            logger.info(f"Found {recent_articles} recent articles, skipping ingestion to avoid duplicates")
             return
     exa = Exa(api_key=EXA_API_KEY)
-    print("Running advanced Exa ingestion for Bangladesh-related news coverage by Indian Media...")
+    logger.info("Running advanced Exa ingestion for Bangladesh-related news coverage by Indian Media...")
     indian_and_bd_domains = [
         "timesofindia.indiatimes.com", "hindustantimes.com", "ndtv.com", "thehindu.com", "indianexpress.com", "indiatoday.in", "news18.com", "zeenews.india.com", "aajtak.in", "abplive.com", "jagran.com", "bhaskar.com", "livehindustan.com", "business-standard.com", "economictimes.indiatimes.com", "livemint.com", "scroll.in", "thewire.in", "wionews.com", "indiatvnews.com", "newsnationtv.com", "jansatta.com", "india.com", "bdnews24.com", "thedailystar.net", "prothomalo.com", "dhakatribune.com", "newagebd.net", "financialexpress.com.bd", "theindependentbd.com", "bbc.com", "reuters.com", "aljazeera.com", "apnews.com", "cnn.com", "nytimes.com", "theguardian.com", "france24.com", "dw.com", "factwatchbd.com", "altnews.in", "boomlive.in", "factchecker.in", "thequint.com", "factcheck.afp.com", "snopes.com", "politifact.com", "fullfact.org", "apnews.com", "factcheck.org"
     ]
@@ -128,7 +161,7 @@ def run_exa_ingestion():
         'scotsman.com', 'thejournal.ie', 'breakingnews.ie', 'irishmirror.ie', 'irishnews.com', 
         'belfasttelegraph.co.uk', 'news.com.au', 'smh.com.au', 'theage.com.au', 'theaustralian.com.au'
     ])
-    print("Starting Exa search with optimized parameters...")
+    logger.info("Starting Exa search with optimized parameters...")
     result = exa.search_and_contents(
         "Bangladesh-related News coverage by Indian news media",
         category="news",
@@ -142,7 +175,7 @@ def run_exa_ingestion():
         ],
         include_text=["Bangladesh"],
         summary={
-            "query": "You are a fact-checking and media-analysis assistant specialising in India–Bangladesh coverage. For the Indian news article at {url} complete ALL of the following tasks and reply **only** with a single JSON object that exactly matches the schema provided below (do not wrap it in Markdown): 1. **extractSummary** → In ≤3 sentences, give a concise, neutral summary of the article's topic and its main claim(s). 2. **sourceDomain** → Return only the publisher's domain, e.g. \"thehindu.com\". 3. **newsCategory** → Classify into one of: Politics • Economy • Crime • Environment • Health • Technology • Diplomacy • Sports • Culture • Other 4. **sentimentTowardBangladesh** → Positive • Negative • Neutral (base it on overall tone toward Bangladesh). 5. **factCheck** → Compare the article's main claim(s) against the latest coverage in these outlets bdnews24.com, thedailystar.net, prothomalo.com, dhakatribune.com, newagebd.net, financialexpress.com.bd, theindependentbd.com, bbc.com, reuters.com, aljazeera.com, apnews.com, cnn.com, nytimes.com, theguardian.com, france24.com, dw.com. Fact-checking sites: factwatchbd.com, altnews.in, boomlive.in, factchecker.in, thequint.com, factcheck.afp.com, snopes.com, politifact.com, fullfact.org, factcheck.org. Return: • **status** \"verified\" | \"unverified\" • **sources** array of URLs used for verification • **similarFactChecks** array of objects { \"title\": …, \"source\": …, \"url\": … } 6. **mediaCoverageSummary** → For both Bangladeshi and international media, give ≤2-sentence summaries of how (or if) the claim was covered. Return \"Not covered\" if nothing found. 7. **supportingArticleMatches** → Two arrays: • **bangladeshiMatches** — articles from bd outlets • **internationalMatches** — articles from international outlets Each item: { \"title\": …, \"source\": …, \"url\": … }",
+            "query": "You are an AI-powered news analyzer. Given a news description, perform the following:\n\n🔹 1. Sentiment\n\nAnalyze sentiment towards Bangladesh. Return:\n\n    positive\n\n    negative\n\n    neutral\n\n🔹 2. Category\n\nClassify into one of:\n\n    politics\n\n    sports\n\n    technology\n\n    crime\n\n    entertainment\n\n    others\n\n🔹 3. Summary\n\nWrite a brief 2–3 sentence summary of the news.\n🔹 4. Fact Check\n\n    Search for similar news articles published by news media.\n\n    Return up to 5 sources, prioritizing:\n\n        ✅ At least one Bangladeshi news outlet (check is mandatory)\n\n        ✅ At least one international outlet from a different country\n\nReturn:\n\n    fact_check:\n\n        verified → if at least 1 BD + 1 international source found\n\n        partially_verified → if only international, no BD news found\n\n        unverified → if no reliable sources found at all\n\n    bd_news_found: true / false\n\n    sources_found: integer (total number of similar articles found)\n\n    sources: array with objects containing:\n\n        source_name\n\n        source_country\n\n        source_url",
             "schema": {
                 "$schema": "http://json-schema.org/draft-07/schema#",
                 "title": "IndianNewsArticleAnalysis",
@@ -283,7 +316,7 @@ def run_exa_ingestion():
         }
     )
 
-    print(f"Total results: {len(result.results)}")
+    logger.info(f"Total results: {len(result.results)}")
 
     # Advanced post-processing: filter out bogus news
     def is_article_url(url):
@@ -316,7 +349,7 @@ def run_exa_ingestion():
             return False
         if any(phrase.lower() in title.lower() for phrase in bad_phrases):
             return False
-        return "bangladesh" in title.lower()
+        return True  # No longer require 'bangladesh' in title
 
     def is_article_text(text):
         if not text or len(text) < 300:
@@ -349,31 +382,49 @@ def run_exa_ingestion():
             seen_titles.add(title_hash)
             filtered_results.append(r)
 
-    print(f"Filtered to {len(filtered_results)} likely articles (from {len(result.results)})")
+    logger.info(f"Filtered to {len(filtered_results)} likely articles (from {len(result.results)})")
 
-    print(f"Processing completed in {datetime.datetime.now()}")
+    logger.info(f"Processing completed in {datetime.datetime.now()}")
     for idx, item in enumerate(filtered_results):
         try:
-            print(f"\nProcessing item {idx + 1}:")
-            print("Title:", item.title)
-            print("URL:", item.url)
+            logger.info(f"\nProcessing item {idx + 1}:")
+            logger.info(f"Title: {item.title}")
+            logger.info(f"URL: {item.url}")
             summary = getattr(item, 'summary', None)
-            # Robust summary parsing
-            if summary and isinstance(summary, str):
+            if summary is None:
+                logger.warning(f"[WARNING] No summary for article '{getattr(item, 'title', 'N/A')}', skipping.")
+                continue
+            if isinstance(summary, str):
+                logger.warning(f"[WARNING] Exa returned summary as string for article '{getattr(item, 'title', 'N/A')}'. Attempting to parse.")
                 try:
                     summary = json.loads(summary)
                 except Exception:
-                    print("Warning: Could not parse summary as JSON.")
-            if not summary or not isinstance(summary, dict):
-                print(f"Warning: No valid summary for article {getattr(item, 'title', 'N/A')}, skipping.")
-                continue  # Skip this article
-            # --- LOG SUMMARY FOR DEBUGGING ---
-            print("SUMMARY JSON FROM EXA:", json.dumps(summary, indent=2, ensure_ascii=False))
+                    logger.error(f"[ERROR] Could not parse summary as JSON for article '{getattr(item, 'title', 'N/A')}'. Raw summary: {getattr(item, 'summary', None)}")
+                    continue
+            if not isinstance(summary, dict):
+                logger.error(f"[ERROR] Summary is not a dict for article '{getattr(item, 'title', 'N/A')}', skipping.")
+                continue
+
+            # Log missing/invalid fields
+            if 'newsCategory' not in summary or not summary.get('newsCategory'):
+                logger.info(f"[INFO] newsCategory missing or empty for article '{getattr(item, 'title', 'N/A')}'.")
+            if 'sentimentTowardBangladesh' not in summary or not summary.get('sentimentTowardBangladesh'):
+                logger.info(f"[INFO] sentimentTowardBangladesh missing or empty for article '{getattr(item, 'title', 'N/A')}'.")
+            if 'factCheck' not in summary or not summary.get('factCheck'):
+                logger.info(f"[INFO] factCheck missing or empty for article '{getattr(item, 'title', 'N/A')}'.")
+            logger.info(f"SUMMARY JSON FROM EXA: {json.dumps(summary, indent=2, ensure_ascii=False)}")
+
             # --- FIELD EXTRACTION WITH CORRECT CAMELCASE NAMES ---
             category = summary.get('newsCategory', None) if isinstance(summary, dict) else None
             source = summary.get('sourceDomain', 'Unknown') if isinstance(summary, dict) else 'Unknown'
-            fact_check_val = summary.get('factCheck', {}) if isinstance(summary, dict) else {}
-            fact_check_status = fact_check_val.get('status', 'Unverified') if isinstance(fact_check_val, dict) else 'Unverified'
+            raw_fact_check = summary.get('factCheck', {}) if isinstance(summary, dict) else {}
+            # Extract similarFactChecks from raw_fact_check
+            fact_check_val = {
+                "status": raw_fact_check.get("status", "unverified"),
+                "sources": [s.get("source_url") for s in raw_fact_check.get("sources", []) if isinstance(s, dict) and "source_url" in s],
+                "similarFactChecks": raw_fact_check.get("similar_fact_checks", [])
+            }
+            fact_check_status = fact_check_val.get('status', 'Unverified')
             # Use Exa's category if present, otherwise infer
             if not category or category == "General":
                 category = infer_category(item.title, getattr(item, 'text', None))
@@ -396,11 +447,20 @@ def run_exa_ingestion():
                 bd_matches = []
             if not isinstance(intl_matches, list):
                 intl_matches = []
-            # Secondary fuzzy search for matches if empty
+            # --- Optimized Fuzzy Search Fallback (recent articles only) ---
+            recent_cutoff = datetime.datetime.now() - datetime.timedelta(days=30)
             if not bd_matches:
-                bd_matches = [{'title': a.title, 'source': a.source, 'url': a.url} for a in Article.query.filter(Article.source.in_(bd_sources)).all() if SequenceMatcher(None, a.title.lower(), item.title.lower()).ratio() > 0.7][:3]
+                bd_matches = [
+                    {'title': a.title, 'source': a.source, 'url': a.url}
+                    for a in Article.query.filter(Article.source.in_(bd_sources), Article.published_at >= recent_cutoff).all()
+                    if SequenceMatcher(None, a.title.lower(), item.title.lower()).ratio() > 0.7
+                ][:3]
             if not intl_matches:
-                intl_matches = [{'title': a.title, 'source': a.source, 'url': a.url} for a in Article.query.filter(Article.source.in_(intl_sources)).all() if SequenceMatcher(None, a.title.lower(), item.title.lower()).ratio() > 0.7][:3]
+                intl_matches = [
+                    {'title': a.title, 'source': a.source, 'url': a.url}
+                    for a in Article.query.filter(Article.source.in_(intl_sources), Article.published_at >= recent_cutoff).all()
+                    if SequenceMatcher(None, a.title.lower(), item.title.lower()).ratio() > 0.7
+                ][:3]
             art = Article.query.filter_by(url=item.url).first() or Article(url=item.url)
             art.title = item.title
             if item.published_date:
@@ -453,17 +513,38 @@ def run_exa_ingestion():
             extras['entities'] = top_entities
             art.extras = json.dumps(extras)
             art.full_text = getattr(item, 'text', None)
+            # --- Bangladesh relevance score ---
+            # Simple heuristic: count BD keywords/entities in title/text/entities
+            bd_keywords = [
+                'bangladesh', 'dhaka', 'sheikh hasina', 'bdnews24', 'thedailystar', 'prothomalo', 'dhakatribune', 'newagebd', 'financialexpress.com.bd', 'theindependentbd',
+                'padma', 'jamuna', 'chittagong', 'sylhet', 'khulna', 'rajshahi', 'barisal', 'rangpur', 'mymensingh', 'bengal', 'bengali', 'rohingya', 'cox', 'buriganga', 'ganges', 'sundarbans', 'grameen', 'brac', 'biman', 'sonar bangla', 'ekushey', 'shakib', 'mashrafe', 'mustafizur', 'mirpur', 'banani', 'gulshan', 'uttara', 'motijheel', 'narayanganj', 'gazipur', 'comilla', 'noakhali', 'feni', 'kushtia', 'pabna', 'bogura', 'tangail', 'sirajganj', 'jessore', 'khagrachari', 'bandarban', 'rangamati', 'savar', 'ashulia', 'uttar', 'dakshin', 'bimanbandar', 'agargaon', 'bd', 'bdesh', 'bdeshi', 'bengaluru', 'bengali', 'bengal', 'bdesh', 'bdeshi', 'biman', 'padma', 'jamuna', 'buriganga', 'sundarbans', 'ekushey', 'shakib', 'mashrafe', 'mustafizur', 'mirpur', 'banani', 'gulshan', 'uttara', 'motijheel', 'narayanganj', 'gazipur', 'comilla', 'noakhali', 'feni', 'kushtia', 'pabna', 'bogura', 'tangail', 'sirajganj', 'jessore', 'khagrachari', 'bandarban', 'rangamati', 'savar', 'ashulia', 'uttar', 'dakshin', 'bimanbandar', 'agargaon'
+            ]
+            text_content = f"{item.title or ''} {getattr(item, 'text', '') or ''}".lower()
+            entity_content = ' '.join(top_entities).lower()
+            bd_hits = sum(1 for kw in bd_keywords if kw in text_content or kw in entity_content)
+            total_words = max(1, len(text_content.split()) + len(entity_content.split()))
+            bd_relevance_score = min(100, int(100 * bd_hits / total_words)) if bd_hits else 0
+
+            # --- FactCheck extra fields ---
+            sources_found = raw_fact_check.get('sources_found', len(raw_fact_check.get('sources', [])))
+            bd_news_found = raw_fact_check.get('bd_news_found', False)
+            sources_country = [s.get('source_country') for s in raw_fact_check.get('sources', []) if isinstance(s, dict) and 'source_country' in s]
+
             # Store only the normalized summary
             summary_json_obj = {
                 'source': art.source,
                 'sentiment': art.sentiment,
-                'fact_check': fact_check_val,  # Store full object
+                'fact_check': fact_check_val,  # Store legacy-compatible object
                 'category': category,  # Store as 'category' for consistency
                 'extract_summary': summary.get('extractSummary', ''),
                 'media_coverage_summary': media_coverage,
                 'supporting_article_matches': matches,
+                'sources_found': sources_found,
+                'bd_news_found': bd_news_found,
+                'sources_country': sources_country,
+                'bd_relevance_score': bd_relevance_score
             }
-            print("Final summary_json to save:", json.dumps(summary_json_obj, indent=2, ensure_ascii=False))
+            logger.info(f"Final summary_json to save: {json.dumps(summary_json_obj, indent=2, ensure_ascii=False)}")
             art.summary_json = json.dumps(summary_json_obj, default=str)
             db.session.add(art)
             db.session.commit()
@@ -475,11 +556,11 @@ def run_exa_ingestion():
             for m in intl_matches[:3]:
                 db.session.add(IntMatch(article_id=art.id, title=m.get('title', ''), source=m.get('source', ''), url=m.get('url', '')))
             db.session.commit()
-            print(f"Committed Article: {art.id}")
+            logger.info(f"Committed Article: {art.id}")
         except Exception as e:
-            print(f"Error processing article {getattr(item, 'title', None)}: {e}")
+            logger.error(f"Error processing article {getattr(item, 'title', None)}: {e}")
             db.session.rollback()
-    print("\nDone.")
+    logger.info("\nDone.")
 
 # CLI command
 @app.cli.command('fetch-exa')
@@ -488,7 +569,7 @@ def fetch_exa():
 
 # Scheduler uses the ingestion logic directly
 def run_exa_ingestion_with_context():
-    print(f"[{datetime.datetime.now()}] Scheduled Exa ingestion running...")
+    logger.info(f"[{datetime.datetime.now()}] Scheduled Exa ingestion running...")
     with app.app_context():
         run_exa_ingestion()
 
