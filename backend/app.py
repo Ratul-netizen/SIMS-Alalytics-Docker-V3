@@ -367,36 +367,51 @@ def run_exa_ingestion():
             if not summary or not isinstance(summary, dict):
                 print(f"Warning: No valid summary for article {getattr(item, 'title', 'N/A')}, skipping.")
                 continue  # Skip this article
-            # Now it's safe to use summary.get(...)
-            # Patch all .get calls to be safe
-            category = summary.get('category', None) if isinstance(summary, dict) else None
-            source = summary.get('source', 'Unknown') if isinstance(summary, dict) else 'Unknown'
-            fact_check_val = summary.get('fact_check', {}) if isinstance(summary, dict) else {}
+            # --- LOG SUMMARY FOR DEBUGGING ---
+            print("SUMMARY JSON FROM EXA:", json.dumps(summary, indent=2, ensure_ascii=False))
+            # --- FIELD EXTRACTION WITH CORRECT CAMELCASE NAMES ---
+            category = summary.get('newsCategory', None) if isinstance(summary, dict) else None
+            source = summary.get('sourceDomain', 'Unknown') if isinstance(summary, dict) else 'Unknown'
+            fact_check_val = summary.get('factCheck', {}) if isinstance(summary, dict) else {}
             fact_check_status = fact_check_val.get('status', 'Unverified') if isinstance(fact_check_val, dict) else 'Unverified'
-            extras = getattr(item, 'extras', {})
-            if extras and isinstance(extras, str):
-                try:
-                    extras = json.loads(extras)
-                except Exception:
-                    extras = {}
-            if not isinstance(extras, dict):
-                extras = {}
+            # Use Exa's category if present, otherwise infer
+            if not category or category == "General":
+                category = infer_category(item.title, getattr(item, 'text', None))
+            # Sentiment normalization (with fallback)
+            sentiment_val = summary.get('sentimentTowardBangladesh', None)
+            if not sentiment_val or sentiment_val.lower() not in ['positive', 'negative', 'neutral']:
+                sentiment_val = infer_sentiment(item.title, getattr(item, 'text', None))
+            sentiment = safe_capitalize(sentiment_val, default='Neutral')
+            # Fact check normalization
+            fact_check = safe_capitalize(fact_check_status, default='Unverified')
+            # Summaries
+            media_coverage = summary.get('mediaCoverageSummary', {}) if isinstance(summary, dict) else {}
+            bd_summary = media_coverage.get('bangladeshiMedia', 'Not covered')
+            int_summary = media_coverage.get('internationalMedia', 'Not covered')
+            # Matches (always arrays)
+            matches = summary.get('supportingArticleMatches', {}) if isinstance(summary, dict) else {}
+            bd_matches = matches.get('bangladeshiMatches', []) if isinstance(matches, dict) else []
+            intl_matches = matches.get('internationalMatches', []) if isinstance(matches, dict) else []
+            if not isinstance(bd_matches, list):
+                bd_matches = []
+            if not isinstance(intl_matches, list):
+                intl_matches = []
+            # Secondary fuzzy search for matches if empty
+            if not bd_matches:
+                bd_matches = [{'title': a.title, 'source': a.source, 'url': a.url} for a in Article.query.filter(Article.source.in_(bd_sources)).all() if SequenceMatcher(None, a.title.lower(), item.title.lower()).ratio() > 0.7][:3]
+            if not intl_matches:
+                intl_matches = [{'title': a.title, 'source': a.source, 'url': a.url} for a in Article.query.filter(Article.source.in_(intl_sources)).all() if SequenceMatcher(None, a.title.lower(), item.title.lower()).ratio() > 0.7][:3]
             art = Article.query.filter_by(url=item.url).first() or Article(url=item.url)
             art.title = item.title
             if item.published_date:
                 art.published_at = datetime.datetime.fromisoformat(item.published_date.replace('Z','+00:00'))
             else:
                 art.published_at = None
-            # Author extraction: if missing, try to extract from text
             art.author = getattr(item, 'author', None)
             if not art.author and item.text:
                 author_match = re.search(r'By\s+([A-Za-z\s]+)', item.text)
                 if author_match:
                     art.author = author_match.group(1).strip()
-            # Use Exa's category if present, otherwise infer
-            if not category or category == "General":
-                category = infer_category(item.title, getattr(item, 'text', None))
-            # Source normalization - extract domain from URL instead of using Exa's source field
             from urllib.parse import urlparse
             domain = urlparse(item.url).netloc.lower() if item.url else ''
             if domain in indian_sources:
@@ -407,33 +422,22 @@ def run_exa_ingestion():
                 art.source = domain
             else:
                 art.source = domain if domain else 'Other'
-            # Sentiment normalization
-            sentiment_val = summary.get('sentiment', 'Neutral')
-            sentiment = safe_capitalize(sentiment_val, default='Neutral')
             art.sentiment = sentiment
-            # Fact check normalization
-            fact_check = safe_capitalize(fact_check_status, default='Unverified')
             art.fact_check = fact_check
-            # Summaries
-            comp = summary.get('comparison', {}) if isinstance(summary, dict) else {}
-            art.bd_summary = comp.get('bangladeshi_media', 'Not covered')
-            art.int_summary = comp.get('international_media', 'Not covered')
-            # Matches (always arrays)
-            bd_matches = comp.get('bangladeshi_matches', []) if isinstance(comp, dict) else []
-            intl_matches = comp.get('international_matches', []) if isinstance(comp, dict) else []
-            if not isinstance(bd_matches, list):
-                bd_matches = []
-            if not isinstance(intl_matches, list):
-                intl_matches = []
-            # Secondary fuzzy search for matches if empty
-            if not bd_matches:
-                bd_matches = [{'title': a.title, 'source': a.source, 'url': a.url} for a in Article.query.filter(Article.source.in_(bd_sources)).all() if SequenceMatcher(None, a.title.lower(), item.title.lower()).ratio() > 0.7][:3]
-            if not intl_matches:
-                intl_matches = [{'title': a.title, 'source': a.source, 'url': a.url} for a in Article.query.filter(Article.source.in_(intl_sources)).all() if SequenceMatcher(None, a.title.lower(), item.title.lower()).ratio() > 0.7][:3]
+            art.bd_summary = bd_summary
+            art.int_summary = int_summary
             art.image = getattr(item, 'image', None)
             art.favicon = getattr(item, 'favicon', None)
             art.score = getattr(item, 'score', None)
             # Extras normalization: if links missing, extract from text
+            extras = getattr(item, 'extras', {})
+            if extras and isinstance(extras, str):
+                try:
+                    extras = json.loads(extras)
+                except Exception:
+                    extras = {}
+            if not isinstance(extras, dict):
+                extras = {}
             if not extras.get('links') and item.text:
                 links = re.findall(r'https?://\S+', item.text)
                 extras['links'] = list(set(links))  # remove duplicates
@@ -450,18 +454,17 @@ def run_exa_ingestion():
             art.extras = json.dumps(extras)
             art.full_text = getattr(item, 'text', None)
             # Store only the normalized summary
-            art.summary_json = json.dumps({
+            summary_json_obj = {
                 'source': art.source,
                 'sentiment': art.sentiment,
-                'fact_check': art.fact_check,
-                'category': category,
-                'comparison': {
-                    'bangladeshi_media': art.bd_summary,
-                    'international_media': art.int_summary
-                },
-                'bangladeshi_matches': bd_matches,
-                'international_matches': intl_matches
-            }, default=str)
+                'fact_check': fact_check_val,  # Store full object
+                'category': category,  # Store as 'category' for consistency
+                'extract_summary': summary.get('extractSummary', ''),
+                'media_coverage_summary': media_coverage,
+                'supporting_article_matches': matches,
+            }
+            print("Final summary_json to save:", json.dumps(summary_json_obj, indent=2, ensure_ascii=False))
+            art.summary_json = json.dumps(summary_json_obj, default=str)
             db.session.add(art)
             db.session.commit()
             # Store matches
@@ -612,6 +615,7 @@ def get_article(id):
         'related_articles': related
     })
 
+# --- IMPROVED infer_category ---
 def infer_category(title, text):
     title = (title or "").lower()
     text = (text or "").lower()
@@ -631,11 +635,14 @@ def infer_category(title, text):
         ("Business", ["business", "company", "corporate", "industry", "merger", "acquisition", "startup", "entrepreneur"]),
         ("Crime", ["crime", "theft", "murder", "fraud", "scam", "arrest", "court", "trial"]),
     ]
+    category_scores = {}
     for cat, keywords in category_keywords:
-        for kw in keywords:
-            if re.search(rf'\\b{re.escape(kw)}\\b', content):
-                return cat
-    return "General"
+        score = sum(1 for kw in keywords if re.search(rf'\\b{re.escape(kw)}\\b', content))
+        if score > 0:
+            category_scores[cat] = score
+    if category_scores:
+        return max(category_scores.items(), key=lambda x: x[1])[0]
+    return "Other"
 
 def infer_sentiment(title, text):
     # Simple rule-based sentiment inference
@@ -731,13 +738,36 @@ def dashboard():
             continue
         # Sentiment
         sentiment = a.sentiment or (summary_obj.get('sentiment', 'Neutral') if isinstance(summary_obj, dict) else 'Neutral')
-        # Fact check
-        fact_check = a.fact_check or (summary_obj.get('fact_check', 'Unverified') if isinstance(summary_obj, dict) else 'Unverified')
+        # Fact check (extract full object, handle legacy string case)
+        fact_check_obj = summary_obj.get('fact_check', {}) if isinstance(summary_obj, dict) else {}
+        if isinstance(fact_check_obj, dict):
+            fact_check_status = fact_check_obj.get('status', 'Unverified')
+            fact_check_sources = fact_check_obj.get('sources', [])
+            fact_check_similar = fact_check_obj.get('similar_fact_checks', [])
+        elif isinstance(fact_check_obj, str):
+            fact_check_status = fact_check_obj
+            fact_check_sources = []
+            fact_check_similar = []
+        else:
+            fact_check_status = 'Unverified'
+            fact_check_sources = []
+            fact_check_similar = []
+        # Fallback: if status is 'unverified' and sources is empty, try to heuristically set to 'verified' if trusted source is mentioned in text
+        if fact_check_status == 'unverified' and not fact_check_sources and a.full_text:
+            trusted_sources = set([
+                'bdnews24.com', 'thedailystar.net', 'prothomalo.com', 'dhakatribune.com', 'newagebd.net', 'financialexpress.com.bd', 'theindependentbd.com',
+                'bbc.com', 'reuters.com', 'aljazeera.com', 'apnews.com', 'cnn.com', 'nytimes.com', 'theguardian.com', 'france24.com', 'dw.com',
+                'factwatchbd.com', 'altnews.in', 'boomlive.in', 'factchecker.in', 'thequint.com', 'factcheck.afp.com', 'snopes.com', 'politifact.com', 'fullfact.org', 'factcheck.org'
+            ])
+            for ts in trusted_sources:
+                if ts in a.full_text:
+                    fact_check_status = 'verified'
+                    break
         # Matches
         bd_matches = summary_obj.get('bangladeshi_matches', []) if isinstance(summary_obj, dict) else []
         intl_matches = summary_obj.get('international_matches', []) if isinstance(summary_obj, dict) else []
         # Media coverage summary
-        comp = summary_obj.get('comparison', {}) if isinstance(summary_obj, dict) else {}
+        comp = summary_obj.get('media_coverage_summary', {}) if isinstance(summary_obj, dict) else {}
         bd_summary = comp.get('bangladeshi_media', a.bd_summary or 'Not covered')
         int_summary = comp.get('international_media', a.int_summary or 'Not covered')
         # Entities (optional, if stored in extras)
@@ -778,7 +808,11 @@ def dashboard():
             'source': get_domain(a.url) if a.url else (a.source if a.source and a.source.lower() != 'unknown' else 'Other'),
             'category': category or 'General',
             'sentiment': sentiment,
-            'fact_check': fact_check,
+            'fact_check': {
+                'status': fact_check_status,
+                'sources': fact_check_sources,
+                'similar_fact_checks': fact_check_similar
+            },
             'fact_check_reason': summary_obj.get('fact_check_reason', '') if isinstance(summary_obj, dict) else '',
             'detailsUrl': a.url or '',
             'id': a.id,
@@ -794,7 +828,7 @@ def dashboard():
         sentiment_counts_raw[sentiment] += 1
         sources_in_latest.append(news_item['source'])
         # Fact-checking verdicts
-        v = fact_check
+        v = fact_check_status
         if v not in verdict_counts:
             v = 'Unverified'
         verdict_counts[v] = verdict_counts.get(v, 0) + 1
